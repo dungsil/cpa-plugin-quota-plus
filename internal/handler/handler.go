@@ -3,6 +3,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 
@@ -71,10 +72,40 @@ func (h *Handler) Handle(method string, request []byte) []byte {
 	case pluginabi.MethodQuotaReset:
 		return fail("unsupported", "quota reset is not supported: providers have no upstream reset API")
 	case pluginabi.MethodQuotaFetch:
-		return fail("unsupported", "quota fetch is not supported yet")
+		return h.fetch(request)
 	default:
 		return fail("unknown_method", "unknown method: "+method)
 	}
+}
+
+func (h *Handler) fetch(raw []byte) []byte {
+	var request pluginapi.QuotaFetchRequest
+	if err := json.Unmarshal(raw, &request); err != nil {
+		return fail("invalid_request", "quota.fetch request is invalid")
+	}
+	baseURL := request.Attributes["base_url"]
+	selected, matched := provider.Match(providers, baseURL)
+	if !matched {
+		return fail("invalid_request", "base_url must match a supported official provider URL")
+	}
+	apiKey := request.Attributes["api_key"]
+	if apiKey == "" {
+		return fail("invalid_request", "api_key is required")
+	}
+	fetcher, supported := selected.(provider.Fetcher)
+	if !supported {
+		return fail("unsupported_provider", "quota fetch is not available for this provider")
+	}
+	client, err := provider.NewHTTPClient(h.transport, request.Host.ProxyURL)
+	if err != nil {
+		return fail("invalid_host_proxy", "host proxy configuration is invalid")
+	}
+	defer client.CloseIdleConnections()
+	result, err := fetcher.Fetch(context.Background(), client, apiKey)
+	if err != nil {
+		return fail("quota_fetch_failed", err.Error())
+	}
+	return ok(result)
 }
 
 type authListResponse struct {
