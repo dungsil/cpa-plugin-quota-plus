@@ -1,0 +1,141 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      checks: read
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Extract version
+        id: version
+        uses: nowsprinting/check-version-format-action@v5.0.7
+        with:
+          prefix: v
+
+      - name: Wait for CI tests and builds
+        if: steps.version.outputs.is_valid == 'true'
+        uses: lewagon/wait-on-check-action@v1.9.1
+        with:
+          ref: ${{ github.sha }}
+          repo-token: ${{ github.token }}
+          check-regexp: '^(CI / )?(Test \(tag\)|Build \(tag (linux/amd64|linux/arm64|darwin/arm64|windows/amd64)\))$'
+          allowed-conclusions: success
+          checks-discovery-timeout: 600
+          fail-on-no-checks: true
+          running-workflow-name: Release
+
+      - name: Download Linux amd64 library
+        if: steps.version.outputs.is_valid == 'true'
+        uses: dawidd6/action-download-artifact@v27
+        with:
+          github_token: ${{ github.token }}
+          workflow: ci.yml
+          workflow_search: true
+          workflow_conclusion: ''
+          commit: ${{ github.sha }}
+          event: push
+          name: quota-plus-linux-amd64
+          path: artifacts/quota-plus-linux-amd64
+          search_artifacts: true
+          if_no_artifact_found: fail
+
+      - name: Download Linux arm64 library
+        if: steps.version.outputs.is_valid == 'true'
+        uses: dawidd6/action-download-artifact@v27
+        with:
+          github_token: ${{ github.token }}
+          workflow: ci.yml
+          workflow_search: true
+          workflow_conclusion: ''
+          commit: ${{ github.sha }}
+          event: push
+          name: quota-plus-linux-arm64
+          path: artifacts/quota-plus-linux-arm64
+          search_artifacts: true
+          if_no_artifact_found: fail
+
+      - name: Download macOS arm64 library
+        if: steps.version.outputs.is_valid == 'true'
+        uses: dawidd6/action-download-artifact@v27
+        with:
+          github_token: ${{ github.token }}
+          workflow: ci.yml
+          workflow_search: true
+          workflow_conclusion: ''
+          commit: ${{ github.sha }}
+          event: push
+          name: quota-plus-darwin-arm64
+          path: artifacts/quota-plus-darwin-arm64
+          search_artifacts: true
+          if_no_artifact_found: fail
+
+      - name: Download Windows amd64 library
+        if: steps.version.outputs.is_valid == 'true'
+        uses: dawidd6/action-download-artifact@v27
+        with:
+          github_token: ${{ github.token }}
+          workflow: ci.yml
+          workflow_search: true
+          workflow_conclusion: ''
+          commit: ${{ github.sha }}
+          event: push
+          name: quota-plus-windows-amd64
+          path: artifacts/quota-plus-windows-amd64
+          search_artifacts: true
+          if_no_artifact_found: fail
+
+      - name: Package Linux amd64 release
+        if: steps.version.outputs.is_valid == 'true'
+        uses: vimtor/action-zip@v1.3
+        with:
+          files: artifacts/quota-plus-linux-amd64/quota-plus.so
+          dest: release-assets/quota-plus_${{ steps.version.outputs.full_without_prefix }}_linux_amd64.zip
+          recursive: true
+
+      - name: Package Linux arm64 release
+        if: steps.version.outputs.is_valid == 'true'
+        uses: vimtor/action-zip@v1.3
+        with:
+          files: artifacts/quota-plus-linux-arm64/quota-plus.so
+          dest: release-assets/quota-plus_${{ steps.version.outputs.full_without_prefix }}_linux_arm64.zip
+          recursive: true
+
+      - name: Package macOS arm64 release
+        if: steps.version.outputs.is_valid == 'true'
+        uses: vimtor/action-zip@v1.3
+        with:
+          files: artifacts/quota-plus-darwin-arm64/quota-plus.dylib
+          dest: release-assets/quota-plus_${{ steps.version.outputs.full_without_prefix }}_darwin_arm64.zip
+          recursive: true
+
+      - name: Package Windows amd64 release
+        if: steps.version.outputs.is_valid == 'true'
+        uses: vimtor/action-zip@v1.3
+        with:
+          files: artifacts/quota-plus-windows-amd64/quota-plus.dll
+          dest: release-assets/quota-plus_${{ steps.version.outputs.full_without_prefix }}_windows_amd64.zip
+          recursive: true
+
+      - name: Create GitHub Release and checksums
+        if: steps.version.outputs.is_valid == 'true'
+        uses: goreleaser/goreleaser-action@v7.2.3
+        with:
+          args: release --config .goreleaser-release.yaml --skip=archive --skip=validate
+        env:
+          GITHUB_TOKEN: ${{ github.token }}

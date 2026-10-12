@@ -1,0 +1,15 @@
+version: 2
+project_name: quota-plus
+builds:
+  - id: quota-plus
+    main: ./cmd/quota-plus
+    binary: quota-plus
+    buildmode: c-shared
+    no_unique_dist_dir: true
+    env:
+      - CGO_ENABLED=1
+    targets:
+      - linux_amd64
+      - linux_arm64
+      - darwin_arm64
+      - windows_amd64

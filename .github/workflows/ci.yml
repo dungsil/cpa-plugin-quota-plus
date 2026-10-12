@@ -1,0 +1,75 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - '**'
+    tags:
+      - 'v*'
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test (${{ github.ref_type }})
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7.0.1
+
+      - name: Set up Go
+        uses: actions/setup-go@v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: Run tests
+        uses: robherley/go-test-action@v1.1.0
+        with:
+          testArguments: ./...
+
+  build:
+    name: Build (${{ github.ref_type }} ${{ matrix.goos }}/${{ matrix.goarch }})
+    needs: test
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            goos: linux
+            goarch: amd64
+            ext: so
+          - os: ubuntu-24.04-arm
+            goos: linux
+            goarch: arm64
+            ext: so
+          - os: macos-14
+            goos: darwin
+            goarch: arm64
+            ext: dylib
+          - os: windows-latest
+            goos: windows
+            goarch: amd64
+            ext: dll
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7.0.1
+
+      - name: Set up Go
+        uses: actions/setup-go@v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: Build c-shared library
+        uses: goreleaser/goreleaser-action@v7.2.3
+        with:
+          args: build --single-target --snapshot --clean
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: quota-plus-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: dist/quota-plus.${{ matrix.ext }}
+          if-no-files-found: error

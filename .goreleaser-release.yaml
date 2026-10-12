@@ -1,0 +1,14 @@
+version: 2
+project_name: quota-plus
+builds:
+  - id: quota-plus
+    main: ./cmd/quota-plus
+    skip: true
+checksum:
+  name_template: checksums.txt
+  algorithm: sha256
+  extra_files:
+    - glob: release-assets/*.zip
+release:
+  extra_files:
+    - glob: release-assets/*.zip
